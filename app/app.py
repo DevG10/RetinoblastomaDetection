@@ -226,7 +226,7 @@ def print_predictions(predictions):
                 class_name = CLASS_NAMES[idx]
                 
                 # Color-code confidence levels
-                if confidence > 0.7:
+                if confidence > 0.65:
                     confidence_class = 'high-confidence'
                     confidence_icon = '✅'
                 elif confidence > 0.3:
