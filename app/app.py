@@ -12,6 +12,10 @@ from email.mime.application import MIMEApplication
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import HRFlowable
+from datetime import datetime
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.styles import getSampleStyleSheet
 
 CLASS_NAMES = [
@@ -64,71 +68,145 @@ def local_css():
     """, unsafe_allow_html=True)
 
 def generate_pdf_report(predictions, image_path):
-    """Generate a visually enhanced PDF report."""
+    """Generate a visually enhanced PDF report with logo and professional styling."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
-    
     styles = getSampleStyleSheet()
     report_content = []
     
-    # Title and Intro Section
-    report_content.append(Paragraph("RetinoNet Diagnostic Report", styles['Title']))
-    report_content.append(Spacer(1, 12))
-    intro_text = """
-    <font size=12>
-    Dear Patient,<br/>
-    Below is the diagnostic report based on the retinal image analysis. Please note that this is a screening tool and should not replace a professional medical diagnosis.<br/>
-    We recommend that you consult a healthcare professional for confirmation and further actions.
-    </font>
-    """
-    report_content.append(Paragraph(intro_text, styles['Normal']))
-    report_content.append(Spacer(1, 24))
+    # Custom Styles
+    title_style = styles['Title']
+    title_style.textColor = colors.HexColor('#1E40AF')
+    title_style.fontSize = 24
+    title_style.leading = 30
+
+    subtitle_style = ParagraphStyle(
+        'Subtitle',
+        parent=styles['Normal'],
+        fontSize=12,
+        textColor= colors.HexColor('#4B5563'),
+        alignment=1,
+        spaceAfter=20
+    )
+
+    # Header with Logo
+    try:
+        logo_path = os.getenv("LOGO_PATH")
+        logo = RLImage(logo_path, width=120, height=60)
+        header = Table(
+            [[logo, Paragraph("<b>RetinoNet Diagnostics</b><br/>"
+                            "123 Medical Drive<br/>"
+                            "Health City, HC 12345<br/>"
+                            "contact@retinonet.com<br/>"
+                            "www.retinonet.ai", styles['BodyText'])]],
+            colWidths=[150, 400]
+        )
+        header.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (0,0), (0,0), 'CENTER'),
+            ('LEFTPADDING', (1,0), (1,0), 20),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 15),
+        ]))
+        report_content.append(header)
+        report_content.append(HRFlowable(width="100%", thickness=1, 
+                                       color=colors.HexColor('#1E40AF')))
+    except:
+        st.error("Logo not found - using text header")
+        report_content.append(Paragraph("RetinoNet Diagnostics", title_style))
     
-    # Image Section (Display Image of Retinal Scan)
-    img = RLImage(image_path, width=300, height=300)
+    # Title Section
+    report_content.append(Spacer(1, 15))
+    report_content.append(Paragraph("Diagnostic Report", title_style))
+    report_content.append(Paragraph("AI-Powered Retinal Analysis Report", subtitle_style))
+    
+    # Patient Info Section (Sample - can be expanded)
+    patient_info = [
+        ["Patient ID:", "RN-23456"],
+        ["Date of Analysis:", datetime.now().strftime("%Y-%m-%d")],
+        ["Analysis Type:", "Retinoblastoma Screening"]
+    ]
+    patient_table = Table(patient_info, colWidths=[120, 300])
+    patient_table.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F3F4F6')),
+        ('TEXTCOLOR', (0,0), (-1,-1), colors.HexColor('#1F2937')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#E5E7EB')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#E5E7EB')),
+    ]))
+    report_content.append(patient_table)
+    report_content.append(Spacer(1, 25))
+
+    # Image Section
+    report_content.append(Paragraph("<b>Analyzed Image</b>", styles['Heading2']))
+    report_content.append(Spacer(1, 10))
+    img = RLImage(image_path, width=300, height=300, kind='proportional')
+    img.hAlign = 'CENTER'
     report_content.append(img)
-    report_content.append(Spacer(1, 24))
+    report_content.append(Spacer(1, 25))
+
+    # Results Section
+    report_content.append(Paragraph("<b>Diagnostic Findings</b>", styles['Heading2']))
     
-    # Prediction Results Section (Prediction Table)
-    report_content.append(Paragraph("<b>Prediction Results:</b>", styles['Heading2']))
-    
-    prediction_data = [("Class Name", "Confidence Level")]
+    # Create confidence level color scale
+    prediction_data = []
     for pred in predictions:
         sorted_indices = np.argsort(pred)[::-1]
-        
         for idx in sorted_indices:
             confidence = pred[idx]
             class_name = CLASS_NAMES[idx]
-            prediction_data.append([class_name, f"{confidence:.2%}"])
-    
-    # Table to display prediction results
-    table = Table(prediction_data, colWidths=[150, 100])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            color = colors.HexColor('#10B981') if confidence > 0.65 else \
+                    colors.HexColor('#F59E0B') if confidence > 0.3 else \
+                    colors.HexColor('#EF4444')
+            prediction_data.append([
+                Paragraph(class_name, styles['Normal']),
+                Paragraph(f"{confidence:.2%}", 
+                         ParagraphStyle('Confidence', textColor=color))
+            ])
+
+    # Create results table
+    results_table = Table(prediction_data, colWidths=[300, 100])
+    results_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E40AF')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 12),
+        ('BOTTOMPADDING', (0,0), (-1,0), 10),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#F8FAFC')]),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#E5E7EB')),
     ]))
-    report_content.append(table)
-    report_content.append(Spacer(1, 24))
-    
+    report_content.append(results_table)
+    report_content.append(Spacer(1, 25))
+
+    # Recommendation Section
     recommendation = get_recommendation(predictions)
-    report_content.append(Paragraph(f"<b>Thoughts:</b>", styles['Heading2']))
-    report_content.append(Spacer(1, 12))
-    report_content.append(Paragraph(recommendation, styles['Normal']))
-    report_content.append(Spacer(1, 24))
-    footer_text = """
-    <font size=10>
-    RetinoNet is a diagnostic tool for educational and screening purposes. Always consult with a certified medical professional for diagnosis and treatment.<br/>
-    </font>
-    """
-    report_content.append(Spacer(1, 24))
-    report_content.append(Paragraph(footer_text, styles['Normal']))
-    
-    doc.build(report_content)
+    recommendation_style = ParagraphStyle(
+        'Recommendation',
+        parent=styles['BodyText'],
+        backColor=colors.HexColor('#DBEAFE'),
+        borderColor=colors.HexColor('#1E40AF'),
+        borderWidth=1,
+        borderPadding=(10, 5, 10, 5),
+        leftIndent=10,
+        fontSize=12,
+        leading=18
+    )
+    report_content.append(Paragraph("<b>Clinical Recommendation</b>", styles['Heading2']))
+    report_content.append(Spacer(1, 10))
+    report_content.append(Paragraph(recommendation, recommendation_style))
+    report_content.append(Spacer(1, 25))
+
+    # Footer Function
+    def add_footer(canvas, doc):
+        canvas.saveState()
+        footer_text = f"Page {doc.page} | Confidential Report - RetinoNet AI Diagnostics"
+        canvas.setFont('Helvetica', 8)
+        canvas.setFillColor(colors.HexColor('#6B7280'))
+        canvas.drawCentredString(letter[0]/2.0, 0.4*inch, footer_text)
+        canvas.restoreState()
+
+    # Build document with footer
+    doc.build(report_content, onFirstPage=add_footer, onLaterPages=add_footer)
     buffer.seek(0)
     return buffer
 
