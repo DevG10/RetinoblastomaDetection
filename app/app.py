@@ -95,10 +95,9 @@ def generate_pdf_report(predictions, image_path):
         logo = RLImage(logo_path, width=120, height=60)
         header = Table(
             [[logo, Paragraph("<b>RetinoNet Diagnostics</b><br/>"
-                            "123 Medical Drive<br/>"
-                            "Health City, HC 12345<br/>"
+                            "Pimpri Chinchwad, MH 12345<br/>"
                             "contact@retinonet.com<br/>"
-                            "www.retinonet.ai", styles['BodyText'])]],
+                            "retinonet.streamlit.app", styles['BodyText'])]],
             colWidths=[150, 400]
         )
         header.setStyle(TableStyle([
@@ -121,7 +120,6 @@ def generate_pdf_report(predictions, image_path):
     
     # Patient Info Section (Sample - can be expanded)
     patient_info = [
-        ["Patient ID:", "RN-23456"],
         ["Date of Analysis:", datetime.now().strftime("%Y-%m-%d")],
         ["Analysis Type:", "Retinoblastoma Screening"]
     ]
@@ -142,6 +140,8 @@ def generate_pdf_report(predictions, image_path):
     img = RLImage(image_path, width=300, height=300, kind='proportional')
     img.hAlign = 'CENTER'
     report_content.append(img)
+    report_content.append(Spacer(1, 25))
+    report_content.append(Spacer(1, 25))
     report_content.append(Spacer(1, 25))
 
     # Results Section
