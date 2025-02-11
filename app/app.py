@@ -70,6 +70,7 @@ def local_css():
     </style>
     """, unsafe_allow_html=True)
 
+
 def generate_pdf_report(predictions, image_path):
     """Generate a visually enhanced PDF report with logo and professional styling."""
     buffer = io.BytesIO()
