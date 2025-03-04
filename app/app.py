@@ -22,7 +22,6 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.styles import getSampleStyleSheet
 import re
 import dns.resolver
-import cv2
 import mediapipe as mp
 
 CLASS_NAMES = [
