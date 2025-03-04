@@ -450,7 +450,7 @@ def main():
     
     # Load machine learning model
     try:
-        model = load_model(path=os.getenv('MODEL_PATH'))
+        model = load_model(weight_path=os.getenv('MODEL_PATH'))
     except Exception as e:
         st.error(f"Error loading model: {e}")
         return
