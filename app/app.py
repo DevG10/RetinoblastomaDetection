@@ -533,6 +533,5 @@ def main():
     else:
         st.info("Please upload or capture a retinal image for analysis.")
 
-# Run the main application
 if __name__ == "__main__":
     main()
