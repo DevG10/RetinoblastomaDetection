@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from tensorflow.keras.applications import ResNet50V2
 from tensorflow.keras import layers, models
 from tensorflow.keras.optimizers import Adam
-import pickle
+import cv2
 import io
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -356,15 +356,7 @@ def print_predictions(predictions):
                 
                 st.markdown(f'<p class="{confidence_class}">{confidence_icon} {class_name}: {confidence:.2%}</p>', 
                             unsafe_allow_html=True)
-import cv2
-import numpy as np
-import mediapipe as mp
-from PIL import Image
 
-import cv2
-import numpy as np
-import mediapipe as mp
-from PIL import Image
 
 def crop_to_retinal_area(image, target_size=(224, 224)):
     """
