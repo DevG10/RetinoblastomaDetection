@@ -3,7 +3,9 @@ import numpy as np
 import os
 from PIL import Image
 from dotenv import load_dotenv
-from tensorflow import keras
+from tensorflow.keras.applications import ResNet50V2
+from tensorflow.keras import layers, models
+from tensorflow.keras.optimizers import Adam
 import pickle
 import io
 import smtplib
@@ -305,9 +307,23 @@ def is_valid_email(email):
     return False, "Email verification failed. Please check your email."
 
 @st.cache_resource
-def load_model(path):
+def load_model(weight_path, input_shape=(224, 224, 3), num_classes=4):
     """Load the machine learning model."""
-    model = keras.models.load_model(path)
+    resnet = ResNet50V2(weights='imagenet', include_top=False, input_shape=input_shape)
+    resnet.trainable = False
+    model = models.Sequential([
+    resnet,
+    layers.GlobalAveragePooling2D(),
+    layers.Dense(256, activation='relu'),
+    layers.Dropout(0.3),
+    layers.Dense(num_classes, activation='sigmoid')
+    ])
+    model.compile(
+    optimizer=Adam(0.0001),
+    loss='binary_crossentropy',
+    metrics=['accuracy']
+    )
+    model.load_weights(weight_path)
     return model
 
 def print_predictions(predictions):
