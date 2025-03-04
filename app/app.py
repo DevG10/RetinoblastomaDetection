@@ -500,10 +500,6 @@ def main():
                 class3_spoofed = round(random.uniform(0.1, 0.30))
                 class4_spoofed = round(random.uniform(0.1, 0.30))
                 spoofed_confidence = round(random.uniform(0.60, 0.80))
-                class2_spoofed = round(class2_spoofed * 100, 2)
-                class3_spoofed = round(class3_spoofed * 100, 2)
-                class4_spoofed = round(class4_spoofed * 100, 2)
-                spoofed_confidence = round(spoofed_confidence * 100, 2)
                 
                 
                 preds = np.array([[class2_spoofed, class3_spoofed, class4_spoofed, spoofed_confidence]])
