@@ -3,6 +3,7 @@ import numpy as np
 import os
 from PIL import Image
 from dotenv import load_dotenv
+from tensorflow import keras
 import pickle
 import io
 import smtplib
@@ -17,6 +18,10 @@ from reportlab.platypus import HRFlowable
 from datetime import datetime
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.styles import getSampleStyleSheet
+import re
+import dns.resolver
+import cv2
+import mediapipe as mp
 
 CLASS_NAMES = [
     "Bilateral Retinoblastoma",
@@ -67,6 +72,7 @@ def local_css():
     </style>
     """, unsafe_allow_html=True)
 
+
 def generate_pdf_report(predictions, image_path):
     """Generate a visually enhanced PDF report with logo and professional styling."""
     buffer = io.BytesIO()
@@ -95,7 +101,7 @@ def generate_pdf_report(predictions, image_path):
         logo = RLImage(logo_path, width=120, height=60)
         header = Table(
             [[logo, Paragraph("<b>RetinoNet Diagnostics</b><br/>"
-                            "Pimpri Chinchwad, MH 12345<br/>"
+                            "Pimpri Chinchwad, MH 411044<br/>"
                             "contact@retinonet.com<br/>"
                             "retinonet.streamlit.app", styles['BodyText'])]],
             colWidths=[150, 400]
@@ -278,12 +284,30 @@ def send_email_report(email, pdf_buffer, image):
     except Exception as e:
         st.error(f"Email sending failed: {e}")
         return False
+    
+def is_valid_email(email):
+    """Validate email using regex, MX lookup, and SMTP handshake."""
+    
+    # 1. Regex pattern to validate email format
+    email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    if not re.match(email_regex, email):
+        return False, "Invalid email format. Please enter a correct email address."
+    
+    # 2. Extract domain and check if MX records exist
+    domain = email.split('@')[-1]
+    try:
+        mx_records = dns.resolver.resolve(domain, 'MX')
+        if mx_records:
+            return True, "Email format is valid and domain has mail servers."
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.LifetimeTimeout):
+        return False, "Email domain does not have a valid mail server."
+        
+    return False, "Email verification failed. Please check your email."
 
 @st.cache_resource
 def load_model(path):
-    """Load the machine learning model from a pickle file."""
-    with open(path, 'rb') as file:
-        model = pickle.load(file)
+    """Load the machine learning model."""
+    model = keras.models.load_model(path)
     return model
 
 def print_predictions(predictions):
@@ -316,6 +340,74 @@ def print_predictions(predictions):
                 
                 st.markdown(f'<p class="{confidence_class}">{confidence_icon} {class_name}: {confidence:.2%}</p>', 
                             unsafe_allow_html=True)
+import cv2
+import numpy as np
+import mediapipe as mp
+from PIL import Image
+
+import cv2
+import numpy as np
+import mediapipe as mp
+from PIL import Image
+
+def crop_to_retinal_area(image, target_size=(224, 224)):
+    """
+    Detects the face using Mediapipe Face Detection and crops the image
+    to focus on the eye region.
+    
+    Args:
+        image: PIL Image object (or None)
+        
+    Returns:
+        PIL Image cropped to focus on the eyes, or the original image if no face is detected.
+    """
+    if image is None:
+        return None  # Return None if no image is provided
+
+    # Convert PIL image to OpenCV format (RGB->BGR)
+    image_cv = cv2.cvtColor(np.array(image.convert("RGB")), cv2.COLOR_RGB2BGR)
+    ih, iw, _ = image_cv.shape
+
+    # Initialize Mediapipe Face Detection
+    mp_face_detection = mp.solutions.face_detection
+    with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detection:
+        results = face_detection.process(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+        
+        if results.detections:
+            detection = results.detections[0]
+            bboxC = detection.location_data.relative_bounding_box
+            
+            # Compute absolute coordinates
+            x = int(bboxC.xmin * iw)
+            y = int(bboxC.ymin * ih)
+            w = int(bboxC.width * iw)
+            h = int(bboxC.height * ih)
+
+            # Adjust cropping to focus on the eyes
+            eye_region_y = y + int(0.2 * h)  # Move down to the eye region
+            eye_region_h = int(0.3 * h)  # Take only 30% of the face height
+            eye_region_x = x + int(0.15 * w)  # Crop some sides to focus on eyes
+            eye_region_w = int(0.7 * w)  # Reduce width to focus on eyes
+            
+            # Ensure crop stays within image boundaries
+            min_x = max(0, eye_region_x)
+            min_y = max(0, eye_region_y)
+            max_x = min(iw, eye_region_x + eye_region_w)
+            max_y = min(ih, eye_region_y + eye_region_h)
+            
+            cropped_cv = image_cv[min_y:max_y, min_x:max_x]
+            result_image = Image.fromarray(cv2.cvtColor(cropped_cv, cv2.COLOR_BGR2RGB))
+            return result_image
+
+    return image  # If no face detected, return original image
+
+
+ 
+
+
+mp_selfie_segmentation = mp.solutions.selfie_segmentation
+segment = mp_selfie_segmentation.SelfieSegmentation(model_selection=1)
+
 
 def main():
     """Main Streamlit application function."""
@@ -384,10 +476,11 @@ def main():
             image = Image.open(camera_image).resize((224, 224))
     
     # Process and analyze image
+    processed_img = crop_to_retinal_area(image)
     if image is not None:
         _, col2, _ = st.columns([1,3,1])
         with col2:
-            st.image(image, caption='Submitted Retinal Image', use_column_width=True)
+            st.image(processed_img, caption='Submitted Retinal Image', use_column_width=True)
         
         image_array = np.array(image)
         image_array = image_array / 255.0
@@ -404,36 +497,41 @@ def main():
         send_report = st.button('Send Report')
 
         if send_report:
-            st.write(f"Email entered: {email}")  # Use st.write instead of print
+            st.write(f"Email entered: {email}")
             
-            if email and '@' in email:
-                try:
-                    # Save temporary image
-                    temp_image_path = 'temp_retinal_image.png'
-                    image.save(temp_image_path)
-
-                    # Generate PDF
-                    st.write("Generating PDF Report...")
-                    pdf_buffer = generate_pdf_report(preds, temp_image_path)
-                    
-                    # Send email
-                    result = send_email_report(email, pdf_buffer, image)
-                    
-                    if result:
-                        st.success('Report sent successfully!')
-                    else:
-                        st.error('Failed to send email. Please check your configuration.')
-                    
-                    # Remove temporary image
-                    os.remove(temp_image_path)
+            if email:
+                is_valid, message = is_valid_email(email)
                 
-                except Exception as e:
-                    st.error(f"An unexpected error occurred: {e}")
+                if is_valid:
+                    try:
+                        # Save temporary image
+                        temp_image_path = 'temp_retinal_image.png'
+                        image.save(temp_image_path)
+
+                        # Generate PDF
+                        st.write("Generating PDF Report...")
+                        pdf_buffer = generate_pdf_report(preds, temp_image_path)
+                        
+                        # Send email
+                        result = send_email_report(email, pdf_buffer, image)
+                        
+                        if result:
+                            st.success('Report sent successfully!')
+                        else:
+                            st.error('Failed to send email.')
+                        
+                        # Remove temporary image
+                        os.remove(temp_image_path)
+                    
+                    except Exception as e:
+                        st.error(f"An unexpected error occurred: {e}")
+                else:
+                    st.error(message)
             else:
-                st.error('Please enter a valid email address.')
+                st.error('Please enter an email address.')
+
     else:
         st.info("Please upload or capture a retinal image for analysis.")
 
-# Run the main application
 if __name__ == "__main__":
     main()
