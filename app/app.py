@@ -496,10 +496,10 @@ def main():
         
         with st.spinner('Analyzing image...'):
             if input_method == "Camera Capture":
-                class2_spoofed = round(random.uniform(0.1, 0.30), 2)
-                class3_spoofed = round(random.uniform(0.1, 0.30), 2)
-                class4_spoofed = round(random.uniform(0.1, 0.30), 2)
-                spoofed_confidence = round(random.uniform(0.60, 0.80), 2)
+                class2_spoofed = "{:.2f}".format(random.uniform(0.1, 0.30))
+                class3_spoofed = "{:.2f}".format(random.uniform(0.1, 0.30))
+                class4_spoofed = "{:.2f}".format(random.uniform(0.1, 0.30))
+                spoofed_confidence = "{:.2f}".format(random.uniform(0.60, 0.80
                 
                 preds = np.array([[class2_spoofed, class3_spoofed, class4_spoofed, spoofed_confidence]])
             else:
