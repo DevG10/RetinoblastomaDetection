@@ -20,6 +20,8 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.styles import getSampleStyleSheet
 import re
 import dns.resolver
+import cv2
+import mediapipe as mp
 
 CLASS_NAMES = [
     "Bilateral Retinoblastoma",
@@ -99,7 +101,7 @@ def generate_pdf_report(predictions, image_path):
         logo = RLImage(logo_path, width=120, height=60)
         header = Table(
             [[logo, Paragraph("<b>RetinoNet Diagnostics</b><br/>"
-                            "Pimpri Chinchwad, MH 12345<br/>"
+                            "Pimpri Chinchwad, MH 411044<br/>"
                             "contact@retinonet.com<br/>"
                             "retinonet.streamlit.app", styles['BodyText'])]],
             colWidths=[150, 400]
@@ -295,26 +297,12 @@ def is_valid_email(email):
     domain = email.split('@')[-1]
     try:
         mx_records = dns.resolver.resolve(domain, 'MX')
+        if mx_records:
+            return True, "Email format is valid and domain has mail servers."
     except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.LifetimeTimeout):
         return False, "Email domain does not have a valid mail server."
-    
-    # 3. Perform SMTP handshake to verify the recipient email exists
-    try:
-        mail_server = str(mx_records[0].exchange)
-        server = smtplib.SMTP(mail_server, 25, timeout=5)
-        server.set_debuglevel(0)
-        server.helo()
-        server.mail('test@example.com')
-        code, _ = server.rcpt(email)
-        server.quit()
         
-        if code == 250:
-            return True, "Email is valid."
-        else:
-            return False, "Email address not found. Please enter a valid email."
-    
-    except Exception:
-        return False, "Email verification failed. Please check your email."
+    return False, "Email verification failed. Please check your email."
 
 @st.cache_resource
 def load_model(path):
@@ -352,6 +340,74 @@ def print_predictions(predictions):
                 
                 st.markdown(f'<p class="{confidence_class}">{confidence_icon} {class_name}: {confidence:.2%}</p>', 
                             unsafe_allow_html=True)
+import cv2
+import numpy as np
+import mediapipe as mp
+from PIL import Image
+
+import cv2
+import numpy as np
+import mediapipe as mp
+from PIL import Image
+
+def crop_to_retinal_area(image, target_size=(224, 224)):
+    """
+    Detects the face using Mediapipe Face Detection and crops the image
+    to focus on the eye region.
+    
+    Args:
+        image: PIL Image object (or None)
+        
+    Returns:
+        PIL Image cropped to focus on the eyes, or the original image if no face is detected.
+    """
+    if image is None:
+        return None  # Return None if no image is provided
+
+    # Convert PIL image to OpenCV format (RGB->BGR)
+    image_cv = cv2.cvtColor(np.array(image.convert("RGB")), cv2.COLOR_RGB2BGR)
+    ih, iw, _ = image_cv.shape
+
+    # Initialize Mediapipe Face Detection
+    mp_face_detection = mp.solutions.face_detection
+    with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detection:
+        results = face_detection.process(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+        
+        if results.detections:
+            detection = results.detections[0]
+            bboxC = detection.location_data.relative_bounding_box
+            
+            # Compute absolute coordinates
+            x = int(bboxC.xmin * iw)
+            y = int(bboxC.ymin * ih)
+            w = int(bboxC.width * iw)
+            h = int(bboxC.height * ih)
+
+            # Adjust cropping to focus on the eyes
+            eye_region_y = y + int(0.2 * h)  # Move down to the eye region
+            eye_region_h = int(0.3 * h)  # Take only 30% of the face height
+            eye_region_x = x + int(0.15 * w)  # Crop some sides to focus on eyes
+            eye_region_w = int(0.7 * w)  # Reduce width to focus on eyes
+            
+            # Ensure crop stays within image boundaries
+            min_x = max(0, eye_region_x)
+            min_y = max(0, eye_region_y)
+            max_x = min(iw, eye_region_x + eye_region_w)
+            max_y = min(ih, eye_region_y + eye_region_h)
+            
+            cropped_cv = image_cv[min_y:max_y, min_x:max_x]
+            result_image = Image.fromarray(cv2.cvtColor(cropped_cv, cv2.COLOR_BGR2RGB))
+            return result_image
+
+    return image  # If no face detected, return original image
+
+
+ 
+
+
+mp_selfie_segmentation = mp.solutions.selfie_segmentation
+segment = mp_selfie_segmentation.SelfieSegmentation(model_selection=1)
+
 
 def main():
     """Main Streamlit application function."""
@@ -420,10 +476,11 @@ def main():
             image = Image.open(camera_image).resize((224, 224))
     
     # Process and analyze image
+    processed_img = crop_to_retinal_area(image)
     if image is not None:
         _, col2, _ = st.columns([1,3,1])
         with col2:
-            st.image(image, caption='Submitted Retinal Image', use_column_width=True)
+            st.image(processed_img, caption='Submitted Retinal Image', use_column_width=True)
         
         image_array = np.array(image)
         image_array = image_array / 255.0
