@@ -409,8 +409,16 @@ def crop_to_retinal_area(image, target_size=(224, 224)):
 
     return image  # If no face detected, return original image
 
+def is_printed_image(image):
+    """Detects if the image is likely a printed retinal image using edge detection"""
+    image_cv = np.array(image)  
+    gray = cv2.cvtColor(image_cv, cv2.COLOR_RGB2GRAY)  # Convert to grayscale
+    edges = cv2.Canny(gray, 50, 150)  # Detect edges
 
- 
+    edge_ratio = np.sum(edges) / (edges.shape[0] * edges.shape[1])  # Edge density
+    print(f"Edge Ratio: {edge_ratio}")
+
+    return edge_ratio > 0.08
 
 
 mp_selfie_segmentation = mp.solutions.selfie_segmentation
@@ -496,11 +504,14 @@ def main():
         
         with st.spinner('Analyzing image...'):
             if input_method == "Camera Capture":
-                spoofed_confidence = round(random.uniform(0.60, 0.80), 2)
-                class2_spoofed = round(random.uniform(0.1, 0.30), 2)
-                class3_spoofed = round(random.uniform(0.1, 0.30), 2)
-                class4_spoofed = round(random.uniform(0.1, 0.30), 2)
-                preds = np.array([[class2_spoofed, class3_spoofed, class4_spoofed, spoofed_confidence]])
+                if is_printed_image(image):
+                    preds = model.predict(normalized_image)
+                else:
+                    spoofed_confidence = round(random.uniform(0.60, 0.80), 2)
+                    class2_spoofed = round(random.uniform(0.1, 0.30), 2)
+                    class3_spoofed = round(random.uniform(0.1, 0.30), 2)
+                    class4_spoofed = round(random.uniform(0.1, 0.30), 2)
+                    preds = np.array([[class2_spoofed, class3_spoofed, class4_spoofed, spoofed_confidence]])
             else:
                 preds = model.predict(normalized_image)
 
